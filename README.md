@@ -15,7 +15,7 @@ One Pi-hole on K3s that answers DNS for the whole home network and blocks ad and
 | Storage | 1 Gi, `local-path`, query history kept 7 days |
 | Memory limit | 256 Mi |
 | Upstream DNS | `1.1.1.1`, `9.9.9.9` |
-| Local names | `nextcloud.home.arpa` → `<PI_IP>` |
+| Local names | `nextcloud.home.arpa` → `<PI_IP>` (also for pods: ConfigMap `coredns-custom` sends `*.home.arpa` to Pi-hole) |
 | Web UI login | Secret `pihole-web` |
 | Pi's address | ConfigMap `home-network` (created at install, not in git) |
 

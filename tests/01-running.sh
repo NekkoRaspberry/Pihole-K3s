@@ -35,6 +35,8 @@ PI_IP="$(kubectl get configmap -n "$NS" home-network -o jsonpath='{.data.pi-ip}'
 check "local name nextcloud.home.arpa -> the Pi" \
   contains "$(lookup nextcloud.home.arpa)" "Address: $PI_IP"
 check "the Pi's address matches the DNS service" test "$PI_IP" = "$LAN"
+check "pods in the cluster resolve local names too" \
+  contains "$(kubectl exec -n "$TEST_NS" "$CLIENT" -- nslookup nextcloud.home.arpa 2>&1)" "Address: $PI_IP"
 
 # Memory: below 80% of the 256Mi limit
 MEM="$(kubectl top pod -n "$NS" "$POD" --no-headers 2>/dev/null | awk '{print $3}' | tr -d 'Mi')"
