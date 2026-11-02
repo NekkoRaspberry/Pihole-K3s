@@ -145,3 +145,21 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: pihole-data
+---
+# Let pods inside the cluster resolve local names (*.home.arpa) through Pi-hole too,
+# e.g. so Nextcloud can check itself at https://nextcloud.home.arpa.
+# Only home.arpa goes to Pi-hole; every other name works as before.
+# (K3s reads this optional ConfigMap; its own CoreDNS config stays untouched.)
+# Undo: kubectl delete configmap coredns-custom -n kube-system
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  home-arpa.server: |
+    home.arpa:53 {
+      errors
+      cache 30
+      forward . 10.43.0.53
+    }
