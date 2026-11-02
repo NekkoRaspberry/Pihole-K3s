@@ -7,7 +7,7 @@ kind: Namespace
 metadata:
   name: dns
 ---
-# DNS for the home network: reachable on the Pi's address (<PI_IP>:53)
+# DNS for the home network: reachable on the Pi's address (port 53)
 # and inside the cluster at a fixed address (10.43.0.53, used by WireGuard clients)
 apiVersion: v1
 kind: Service
@@ -94,9 +94,12 @@ spec:
             # Answer devices from any network (home network, VPN, cluster)
             - name: FTLCONF_dns_listeningMode
               value: all
-            # Local names for home services
+            # Local names for home services, pointing to the Pi's address
+            # (ConfigMap home-network, created at install: no address in this file)
+            - name: PI_IP
+              valueFrom: { configMapKeyRef: { name: home-network, key: pi-ip } }
             - name: FTLCONF_dns_hosts
-              value: "<PI_IP> nextcloud.home.arpa"
+              value: "$(PI_IP) nextcloud.home.arpa"
             # Fewer SD card writes: save query history every 5 minutes, keep 7 days
             - name: FTLCONF_database_DBinterval
               value: "300"

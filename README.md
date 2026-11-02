@@ -17,6 +17,9 @@ One Pi-hole on K3s that answers DNS for the whole home network and blocks ad and
 | Upstream DNS | `1.1.1.1`, `9.9.9.9` |
 | Local names | `nextcloud.home.arpa` → `<PI_IP>` |
 | Web UI login | Secret `pihole-web` |
+| Pi's address | ConfigMap `home-network` (created at install, not in git) |
+
+> `<PI_IP>` is the Pi's address on your home network (`hostname -I`, first value).
 
 ## Files
 
@@ -31,6 +34,8 @@ One Pi-hole on K3s that answers DNS for the whole home network and blocks ad and
 ```bash
 export KUBECONFIG=~/.kube/config
 kubectl create namespace dns
+# The Pi's address, kept on the Pi only (used for nextcloud.home.arpa)
+kubectl create configmap home-network -n dns --from-literal=pi-ip="$(hostname -I | cut -d' ' -f1)"
 kubectl create secret generic pihole-web -n dns \
   --from-literal=password="$(openssl rand -hex 16)"
 kubectl apply -f pihole.yaml
