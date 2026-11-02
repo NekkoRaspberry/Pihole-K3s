@@ -22,7 +22,7 @@ echo "  ...restarting Pi-hole"
 kubectl rollout restart deployment/pihole -n "$NS" >/dev/null
 check "Pi-hole comes back Ready after restart" \
   kubectl rollout status deployment/pihole -n "$NS" --timeout=180s
-check "DNS works after restart"          resolves example.com
+check "DNS works after restart"          wait_dns
 check "blocked domains survive a restart" is_blocked "$P"
 check "password survives a restart"      api GET /api/info/version
 

@@ -56,6 +56,12 @@ resolves() {
   contains "$out" "Name:" && ! contains "$out" "Address: 0.0.0.0"
 }
 
+# After a restart DNS answers a few seconds after the pod is Ready: wait up to 30s
+wait_dns() {
+  for _ in $(seq 1 15); do resolves example.com && return 0; sleep 2; done
+  return 1
+}
+
 # Is the domain on Pi-hole's deny list? (regex allowed, e.g. "dnstest[a-z]*")
 is_denied() { kubectl exec -n "$NS" deploy/pihole -- pihole deny -l | grep -q "\"$1\""; }
 
