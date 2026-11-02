@@ -1,0 +1,144 @@
+# Pi-hole for K3s: namespace, DNS for the home network, internal web UI and storage
+# Apply with: kubectl apply -f pihole.yaml
+
+# Separate namespace for DNS services
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dns
+---
+# DNS for the home network: reachable on the Pi's address (<PI_IP>:53)
+# and inside the cluster at a fixed address (10.43.0.53, used by WireGuard clients)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole-dns
+  namespace: dns
+spec:
+  type: LoadBalancer
+  clusterIP: 10.43.0.53
+  externalTrafficPolicy: Local   # keep the real device address (per-device stats in the UI)
+  selector:
+    app: pihole
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: 53
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: 53
+      protocol: TCP
+---
+# Web UI + API, internal only (ClusterIP: not reachable from outside the cluster)
+#   pihole-web.dns.svc.cluster.local:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole-web
+  namespace: dns
+spec:
+  type: ClusterIP
+  selector:
+    app: pihole
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+# Settings, blocklists and query history, kept when Pi-hole restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pihole-data
+  namespace: dns
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+# One Pi-hole for the whole home network.
+# Answers DNS questions and blocks ad and tracker domains.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pihole
+  namespace: dns
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # stop the old pod before starting the new one (storage can only be used by one)
+  selector:
+    matchLabels:
+      app: pihole
+  template:
+    metadata:
+      labels:
+        app: pihole
+    spec:
+      containers:
+        - name: pihole
+          # Official image, supports ARM64
+          image: pihole/pihole:2026.10.1
+          env:
+            - name: TZ
+              value: Europe/Lisbon
+            # Password for the web UI and API (Secret pihole-web)
+            - name: FTLCONF_webserver_api_password
+              valueFrom: { secretKeyRef: { name: pihole-web, key: password } }
+            # Where Pi-hole asks for domains it does not block
+            - name: FTLCONF_dns_upstreams
+              value: "1.1.1.1;9.9.9.9"
+            # Answer devices from any network (home network, VPN, cluster)
+            - name: FTLCONF_dns_listeningMode
+              value: all
+            # Local names for home services
+            - name: FTLCONF_dns_hosts
+              value: "<PI_IP> nextcloud.home.arpa"
+            # Fewer SD card writes: save query history every 5 minutes, keep 7 days
+            - name: FTLCONF_database_DBinterval
+              value: "300"
+            - name: FTLCONF_database_maxDBdays
+              value: "7"
+            # No time server (needs extra permissions, the Pi already keeps time)
+            - name: FTLCONF_ntp_ipv4_active
+              value: "false"
+            - name: FTLCONF_ntp_ipv6_active
+              value: "false"
+            - name: FTLCONF_ntp_sync_active
+              value: "false"
+          ports:
+            - containerPort: 53
+              name: dns-udp
+              protocol: UDP
+            - containerPort: 53
+              name: dns-tcp
+              protocol: TCP
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          # Same check as the image's own health check: can it answer DNS?
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "dig +short +norecurse +retry=0 @127.0.0.1 pi.hole"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "dig +short +norecurse +retry=0 @127.0.0.1 pi.hole"]
+            initialDelaySeconds: 120   # first start downloads the blocklists
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /etc/pihole
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pihole-data
