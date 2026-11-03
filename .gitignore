@@ -3,3 +3,6 @@
 *.env
 *.pem
 *.key
+
+# Never commit the CA and certificate keys
+certs/data/

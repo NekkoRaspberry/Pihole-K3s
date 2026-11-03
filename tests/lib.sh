@@ -7,6 +7,7 @@ TEST_NS=dnstest          # temporary namespace for the helper pod (deleted by ru
 CLIENT=dnstest-client    # helper pod with curl and nslookup, acts like a device
 WEB=pihole-web.dns.svc.cluster.local
 DNS_IP=10.43.0.53        # fixed cluster address of the DNS service
+CA="$ROOT/certs/data/ca.crt"   # home CA, created by certs/new-cert.sh
 FAILS=0
 
 pass() { echo "  PASS  $1"; }

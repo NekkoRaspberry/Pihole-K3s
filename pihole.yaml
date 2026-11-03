@@ -30,8 +30,8 @@ spec:
       targetPort: 53
       protocol: TCP
 ---
-# Web UI + API, internal only (ClusterIP: not reachable from outside the cluster)
-#   pihole-web.dns.svc.cluster.local:80
+# Web UI + API, internal (ClusterIP): pihole-web.dns.svc.cluster.local:80
+# On the home network through HTTPS only: https://pihole.home.arpa/admin (Ingress below)
 apiVersion: v1
 kind: Service
 metadata:
@@ -45,6 +45,29 @@ spec:
     - name: http
       port: 80
       targetPort: 80
+---
+# Web UI on the home network: https://pihole.home.arpa/admin (Traefik, built into K3s)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pihole
+  namespace: dns
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure   # HTTPS only
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: pihole.home.arpa
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pihole-web
+                port:
+                  number: 80
 ---
 # Settings, blocklists and query history, kept when Pi-hole restarts
 apiVersion: v1
@@ -99,7 +122,7 @@ spec:
             - name: PI_IP
               valueFrom: { configMapKeyRef: { name: home-network, key: pi-ip } }
             - name: FTLCONF_dns_hosts
-              value: "$(PI_IP) nextcloud.home.arpa"
+              value: "$(PI_IP) nextcloud.home.arpa mailpit.home.arpa pihole.home.arpa"
             # Fewer SD card writes: save query history every 5 minutes, keep 7 days
             - name: FTLCONF_database_DBinterval
               value: "300"
@@ -163,3 +186,14 @@ data:
       cache 30
       forward . 10.43.0.53
     }
+---
+# HTTPS certificate for every *.home.arpa site (Nextcloud, Mailpit, Pi-hole),
+# signed by the home CA. Secret home-arpa-tls is created by certs/new-cert.sh.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default   # Traefik only reads a TLSStore with this name
+  namespace: dns
+spec:
+  defaultCertificate:
+    secretName: home-arpa-tls
